@@ -18,10 +18,11 @@ type OpenAPI struct {
 	//ExternalDocs []ExternalDocumentation `yaml:"externalDocs,omitempty"`
 
 	// Non standard, specific to dbrest
-	Prefix   string            `yaml:"-"`
-	DB       *DB               `yaml:"db,omitempty"`
-	Imports  map[string]string `yaml:"import,omitempty"`
-	children []*OpenAPI
+	Prefix    string            `yaml:"-"`
+	Webserver *Webserver        `yaml:"webserver,omitempty"`
+	DB        *DB               `yaml:"db,omitempty"`
+	Imports   map[string]string `yaml:"import,omitempty"`
+	children  []*OpenAPI
 }
 
 func NewOpenAPI() *OpenAPI {
@@ -44,6 +45,7 @@ func (c *OpenAPI) Unmarshal(filename string) error {
 	c.Info = temp.Info
 	c.Servers = temp.Servers
 	c.DB = temp.DB
+	c.Webserver = temp.Webserver
 
 	// Now flatten it using ourselves as the destination
 	temp.flatten(c)
