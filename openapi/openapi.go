@@ -118,31 +118,19 @@ func (c *OpenAPI) Publish() *OpenAPI {
 			&Path{
 				Summary:     methods.Summary,
 				Description: methods.Description,
-				Get:         publishMethod(methods.Get),
-				Post:        publishMethod(methods.Post),
-				Put:         publishMethod(methods.Put),
-				Patch:       publishMethod(methods.Patch),
-				Delete:      publishMethod(methods.Delete),
-				Head:        publishMethod(methods.Head),
-				Options:     publishMethod(methods.Options),
-				Trace:       publishMethod(methods.Trace),
+				Get:         methods.Get.Publish(),
+				Post:        methods.Post.Publish(),
+				Put:         methods.Put.Publish(),
+				Patch:       methods.Patch.Publish(),
+				Delete:      methods.Delete.Publish(),
+				Head:        methods.Head.Publish(),
+				Options:     methods.Options.Publish(),
+				Trace:       methods.Trace.Publish(),
 			},
 		)
 	}
 
 	return d
-}
-
-func publishMethod(m *Method) *Method {
-	if m == nil {
-		return nil
-	}
-
-	return &Method{
-		Description: m.Description,
-		Summary:     m.Summary,
-		Parameters:  m.Parameters,
-	}
 }
 
 func (c *OpenAPI) flatten(d *OpenAPI) {

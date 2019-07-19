@@ -2,6 +2,7 @@ package openapi
 
 // Method represents the handler of a method
 type Method struct {
+	Tags        []string     `yaml:"tags,omitempty"`
 	Summary     string       `yaml:"summary,omitempty"`
 	Description string       `yaml:"description,omitempty"`
 	Parameters  []Parameters `yaml:"parameters,omitempty"`
@@ -33,4 +34,17 @@ type Handler struct {
 	Function string `yaml:"function"`
 	MaxAge   int    `yaml:"maxAge"`
 	Json     bool   `yaml:"json"`
+}
+
+func (m *Method) Publish() *Method {
+	if m == nil {
+		return nil
+	}
+
+	return &Method{
+		Description: m.Description,
+		Parameters:  m.Parameters,
+		Summary:     m.Summary,
+		Tags:        m.Tags,
+	}
 }
