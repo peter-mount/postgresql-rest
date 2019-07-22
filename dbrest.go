@@ -61,44 +61,29 @@ func (a *DBRest) PostInit() error {
 		if a.config.Webserver.Port > 0 {
 			a.rest.Port = a.config.Webserver.Port
 		}
-
-		if a.config.Webserver.ExposeOpenAPI != "" {
-			api := a.config.Publish()
-			b, err := yaml.Marshal(api)
-			if err != nil {
-				return err
-			}
-			a.rest.Handle("/openapi.yaml", func(r *rest.Rest) error {
-				r.ContentType("application/yaml").
-					Value(b)
-				return nil
-			})
-			log.Println("\n" + string(b[:]))
-
-			a.rest.Static("/", a.config.Webserver.ExposeOpenAPI)
-		}
 	}
 
 	return nil
 }
 
-func (a *DBRest) Startx() error {
+func (a *DBRest) Start() error {
 
-	b, err := yaml.Marshal(&a.config)
-	if err != nil {
-		return err
+	a.config.Start(a.rest)
+
+	if a.config.Webserver != nil && a.config.Webserver.ExposeOpenAPI != "" {
+		api := a.config.Publish()
+		b, err := yaml.Marshal(api)
+		if err != nil {
+			return err
+		}
+		a.rest.Handle("/openapi.yaml", func(r *rest.Rest) error {
+			r.ContentType("application/yaml").
+				Value(b)
+			return nil
+		})
+
+		a.rest.Static("/", a.config.Webserver.ExposeOpenAPI)
 	}
-	log.Println("\n" + string(b[:]))
 
-	// This is the published OpenAPI document minus our extensions
-	api := a.config.Publish()
-	b, err = yaml.Marshal(api)
-	if err != nil {
-		return err
-	}
-	log.Println("\n" + string(b[:]))
-
-	//return nil //a.config.start(a)
-	//return errors.New("FIN")
 	return nil
 }

@@ -1,6 +1,7 @@
 package openapi
 
 import (
+	"github.com/peter-mount/golib/rest"
 	"gopkg.in/yaml.v3"
 )
 
@@ -173,4 +174,14 @@ func (api *OpenAPI) ForEachPath(f func(path, method string, handler *Method) err
 		}
 	}
 	return nil
+}
+
+// ForEachPath calls a function for each path and each method within it.
+// Note this will not call a path with the special summary and description keys
+// used in the OpenAPI spec
+func (api *OpenAPI) Start(server *rest.Server) {
+	_ = api.ForEachPath(func(path, method string, m *Method) error {
+		m.start(path, method, server)
+		return nil
+	})
 }

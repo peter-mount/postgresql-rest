@@ -48,9 +48,7 @@ func (c *OpenAPI) Unmarshal(filename string) error {
 	c.Webserver = temp.Webserver
 
 	// Now flatten it using ourselves as the destination
-	temp.flatten(c)
-
-	return nil
+	return temp.flatten(c)
 }
 
 func (c *OpenAPI) unmarshal(parent *OpenAPI, filename string) error {
@@ -133,7 +131,21 @@ func (c *OpenAPI) Publish() *OpenAPI {
 	return d
 }
 
-func (c *OpenAPI) flatten(d *OpenAPI) {
+func (c *OpenAPI) flatten(d *OpenAPI) error {
+
+	err := c.DB.Start()
+	if err != nil {
+		return err
+	}
+
+	// Ensure head Method has it's DB attached
+	_ = c.ForEachPath(func(path, method string, handler *Method) error {
+		if handler.Handler != nil {
+			handler.Handler.DB = c.DB
+		}
+		return nil
+	})
+
 	// Import the paths
 	for _, e := range c.Paths.paths {
 		d.Paths.Set(AddPrefix(c.Prefix, e.key), e.path)
@@ -141,6 +153,11 @@ func (c *OpenAPI) flatten(d *OpenAPI) {
 
 	// Now any children
 	for _, child := range c.children {
-		child.flatten(d)
+		err = child.flatten(d)
+		if err != nil {
+			return err
+		}
 	}
+
+	return nil
 }

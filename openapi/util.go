@@ -11,5 +11,8 @@ func addSlash(p string) string {
 	return "/" + p
 }
 func AddPrefix(prefix, path string) string {
+	if prefix == "" {
+		return addSlash(path)
+	}
 	return addSlash(prefix) + addSlash(path)
 }
