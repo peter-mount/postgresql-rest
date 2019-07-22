@@ -9,10 +9,11 @@ import (
 )
 
 type OpenAPI struct {
-	OpenAPI string   `yaml:"openapi,omitempty"`
-	Info    *Info    `yaml:"info,omitempty"`
-	Servers []Server `yaml:"servers,omitempty"`
-	Paths   Paths    `yaml:"paths"`
+	OpenAPI    string     `yaml:"openapi,omitempty"`
+	Info       *Info      `yaml:"info,omitempty"`
+	Servers    []Server   `yaml:"servers,omitempty"`
+	Paths      Paths      `yaml:"paths"`
+	Components Components `yaml:"components,omitempty"`
 	//Security     []SecurityRequirement   `yaml:"security,omitempty"`
 	//Tags         []Tag                   `yaml:"tags,omitempty"`
 	//ExternalDocs []ExternalDocumentation `yaml:"externalDocs,omitempty"`
@@ -31,6 +32,7 @@ func NewOpenAPI() *OpenAPI {
 
 func newChildOpenAPI(prefix string) *OpenAPI {
 	api := &OpenAPI{Prefix: prefix}
+	api.Components.init()
 	return api
 }
 
@@ -46,9 +48,16 @@ func (c *OpenAPI) Unmarshal(filename string) error {
 	c.Servers = temp.Servers
 	c.DB = temp.DB
 	c.Webserver = temp.Webserver
+	c.Components.init()
 
 	// Now flatten it using ourselves as the destination
-	return temp.flatten(c)
+	err = temp.flatten(c)
+	if err != nil {
+		return err
+	}
+
+	// Now handle references
+	return c.resolveReferences()
 }
 
 func (c *OpenAPI) unmarshal(parent *OpenAPI, filename string) error {
@@ -107,6 +116,7 @@ func (c *OpenAPI) Publish() *OpenAPI {
 	d.OpenAPI = "3.0.0"
 	d.Info = c.Info
 	d.Servers = c.Servers
+	d.Components = c.Components
 
 	// Copy the paths without our extensions
 	for _, e := range c.Paths.paths {
@@ -149,6 +159,12 @@ func (c *OpenAPI) flatten(d *OpenAPI) error {
 	// Import the paths
 	for _, e := range c.Paths.paths {
 		d.Paths.Set(AddPrefix(c.Prefix, e.key), e.path)
+	}
+
+	// Import components
+	err = c.Components.flatten(&d.Components)
+	if err != nil {
+		return err
 	}
 
 	// Now any children

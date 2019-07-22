@@ -11,25 +11,31 @@ import (
 
 // Method represents the handler of a method
 type Method struct {
-	Tags        []string    `yaml:"tags,omitempty"`
-	Summary     string      `yaml:"summary,omitempty"`
-	Description string      `yaml:"description,omitempty"`
-	Parameters  []Parameter `yaml:"parameters,omitempty"`
-	Handler     *Handler    `yaml:"handler,omitempty"`
+	Tags        []string            `yaml:"tags,omitempty"`
+	Summary     string              `yaml:"summary,omitempty"`
+	Description string              `yaml:"description,omitempty"`
+	Parameters  []*Parameter        `yaml:"parameters,omitempty"`
+	Handler     *Handler            `yaml:"handler,omitempty"`
+	Responses   map[string]Response `yaml:"responses,omitempty"`
 }
 
 type Parameter struct {
-	Name     string `yaml:"name"`
-	In       string `yaml:"in"`
-	Required bool   `yaml:"required"`
-	Schema   struct {
-		Type    string      `yaml:"type"`
-		Format  interface{} `yaml:"format,omitempty"`
-		Minimum interface{} `yaml:"minimum,omitempty"`
-		Maximum interface{} `yaml:"maximum,omitempty"`
-		Enum    interface{} `yaml:"enum,omitempty"`
-		Default interface{} `yaml:"default,omitempty"`
-	} `yaml:"schema"`
+	Reference     `yaml:",inline"`
+	ParameterImpl `yaml:",inline"`
+}
+
+func (p *Parameter) MarshalYAML() (interface{}, error) {
+	if p.Reference.Ref == "" {
+		return p.ParameterImpl, nil
+	}
+	return p.Reference, nil
+}
+
+type ParameterImpl struct {
+	Name            string      `yaml:"name"`
+	In              string      `yaml:"in"`
+	Required        bool        `yaml:"required"`
+	Schema          Schema      `yaml:"schema"`
 	Description     string      `yaml:"description,omitempty"`
 	AllowReserved   bool        `yaml:"allowReserved,omitempty"`
 	AllowEmptyValue bool        `yaml:"allowEmptyValue,omitempty"`
@@ -57,6 +63,7 @@ func (m *Method) Publish() *Method {
 		Parameters:  m.Parameters,
 		Summary:     m.Summary,
 		Tags:        m.Tags,
+		Responses:   m.Responses,
 	}
 }
 
