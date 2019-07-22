@@ -7,7 +7,6 @@ import (
 	"github.com/peter-mount/golib/rest"
 	"github.com/peter-mount/postgresql-rest/openapi"
 	"gopkg.in/yaml.v3"
-	"log"
 	"path/filepath"
 )
 
@@ -56,7 +55,6 @@ func (a *DBRest) PostInit() error {
 		return err
 	}
 
-	log.Println(a.config.Webserver)
 	if a.config.Webserver != nil {
 		if a.config.Webserver.Port > 0 {
 			a.rest.Port = a.config.Webserver.Port
@@ -78,6 +76,7 @@ func (a *DBRest) Start() error {
 		}
 		a.rest.Handle("/openapi.yaml", func(r *rest.Rest) error {
 			r.ContentType("application/yaml").
+				CacheMaxAge(60).
 				Value(b)
 			return nil
 		})

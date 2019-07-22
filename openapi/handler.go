@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/peter-mount/golib/rest"
 	"io/ioutil"
-	"log"
 	"strings"
 )
 
@@ -79,7 +78,6 @@ func (m *Method) start(path, method string, server *rest.Server) {
 
 	m.Handler.sql = "SELECT " + m.Handler.Function + "(" + strings.Join(params, ",") + ")"
 
-	log.Println("ADD", method, path, m.Handler.sql)
 	server.Handle(path, m.handleRequest).Methods(strings.ToUpper(method))
 }
 
@@ -120,7 +118,6 @@ func (m *Method) extractArgs(r *rest.Rest) ([]interface{}, error) {
 		args = append(args, val)
 	}
 
-	log.Println(args)
 	return args, nil
 }
 
@@ -129,8 +126,6 @@ func (m *Method) handleRequest(r *rest.Rest) error {
 	if err != nil {
 		return err
 	}
-
-	log.Println(m.Handler.sql)
 
 	var result sql.NullString
 	err = m.Handler.DB.QueryRow(m.Handler.sql, args...).Scan(&result)
