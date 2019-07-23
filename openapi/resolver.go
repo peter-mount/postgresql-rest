@@ -79,6 +79,17 @@ func (m *Method) visit(r *Resolver) error {
 			return err
 		}
 	}
+
+	for _, resp := range m.Responses {
+		for _, cont := range resp.Content {
+			if cont.Schema != nil {
+				err := r.visit(cont.Schema.Reference, cont.Schema.visit)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
 	return nil
 }
 
@@ -88,5 +99,14 @@ func (p *Parameter) visit(r *Resolver) error {
 		return fmt.Errorf("failed to resolve %s", p.Ref)
 	}
 	p.ParameterImpl = v.ParameterImpl
+	return nil
+}
+
+func (s *Schema) visit(r *Resolver) error {
+	v, ok := r.components.Schemas[s.Reference.RefName()]
+	if !ok {
+		return fmt.Errorf("failed to resolve %s", s.Ref)
+	}
+	s.SchemaImpl = v.SchemaImpl
 	return nil
 }

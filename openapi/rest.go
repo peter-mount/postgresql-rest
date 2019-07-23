@@ -19,6 +19,7 @@ func (api *OpenAPI) Start(server *rest.Server) error {
 // paramHandler is a function that extracts a parameter or fails if invalid
 type paramHandler func(r *rest.Rest) (interface{}, error)
 
+// extractArgs runs through the required parameters, validating them and returns a slice or an error
 func (m *Method) extractArgs(r *rest.Rest) ([]interface{}, error) {
 	var args []interface{}
 
@@ -28,12 +29,12 @@ func (m *Method) extractArgs(r *rest.Rest) ([]interface{}, error) {
 			return nil, err
 		}
 		args = append(args, arg)
-		log.Println(arg)
 	}
 
 	return args, nil
 }
 
+// compile compiles the method by compiling all parameters
 func (m *Method) compile() error {
 
 	for _, param := range m.Parameters {
@@ -46,9 +47,11 @@ func (m *Method) compile() error {
 		}
 	}
 
-	return nil
+	// Finally compile the rest handler
+	return m.compileHandler()
 }
 
+// compile the parameter by compiling it and applying any validations defined in the schema
 func (param *Parameter) compile() (paramHandler, error) {
 	h, err := param.compileParam()
 	if err != nil {
@@ -60,6 +63,8 @@ func (param *Parameter) compile() (paramHandler, error) {
 	return h, nil
 }
 
+// compileParam returns a paramHandler that extracts the value.
+// This is used prior to any other paramHandler's to validate the value
 func (param *Parameter) compileParam() (paramHandler, error) {
 
 	switch param.In {

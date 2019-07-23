@@ -5,6 +5,7 @@ import (
 	"github.com/peter-mount/golib/rest"
 	"regexp"
 	"strconv"
+	"strings"
 )
 
 type Schema struct {
@@ -16,11 +17,13 @@ type SchemaImpl struct {
 	Type                 string             `yaml:"type"`
 	Format               interface{}        `yaml:"format,omitempty"`
 	Pattern              string             `yaml:"pattern,omitempty"`
+	MinLength            *int               `yaml:"minLenth,omitempty"`
+	MaxLength            *int               `yaml:"maxLength,omitempty"`
 	Minimum              *int               `yaml:"minimum,omitempty"`
 	Maximum              *int               `yaml:"maximum,omitempty"`
 	ExclusiveMinimum     bool               `yaml:"exclusiveMinimum,omitempty"`
 	ExclusiveMaximum     bool               `yaml:"exclusiveMaximum,omitempty"`
-	Enum                 interface{}        `yaml:"enum,omitempty"`
+	Enum                 []string           `yaml:"enum,omitempty"`
 	Default              interface{}        `yaml:"default,omitempty"`
 	Properties           map[string]*Schema `yaml:"properties,omitempty"`
 	Items                *Schema            `yaml:"items,omitempty"`
@@ -38,6 +41,7 @@ func (p *Schema) MarshalYAML() (interface{}, error) {
 func (p *Schema) compile(name string, h paramHandler) (paramHandler, error) {
 	var err error
 
+	// Although pattern is strictly for strings, we allow it for all types as they are strings at this point
 	if p.Pattern != "" {
 		h, err = p.compileRegex(name, h)
 	}
@@ -49,14 +53,43 @@ func (p *Schema) compile(name string, h paramHandler) (paramHandler, error) {
 
 		case "integer":
 			h = p.compileInteger(name, h)
+
+		case "string":
+			h = p.compileString(name, h)
 		}
+
+	}
+
+	if err == nil && len(p.Enum) > 0 {
+		// Support enums once validated
+		h = p.compileEnum(name, h, p.Enum)
 	}
 
 	return h, err
 }
 
+func (p *Schema) compileEnum(name string, h paramHandler, enum []string) paramHandler {
+	enumError := Error400("%s not in %s", name, strings.Join(enum, ", "))
+
+	return func(r *rest.Rest) (interface{}, error) {
+		v, err := h(r)
+		if err != nil {
+			return nil, err
+		}
+
+		s := v.(string)
+		for _, e := range enum {
+			if s == e {
+				return s, nil
+			}
+		}
+
+		return nil, enumError
+	}
+}
+
 func (p *Schema) compileBoolean(name string, h paramHandler) paramHandler {
-	boolError := fmt.Errorf("Param %s must match \"true\" or \"false\"", name)
+	boolError := Error400("%s must match \"true\" or \"false\"", name)
 
 	return func(r *rest.Rest) (interface{}, error) {
 		v, err := h(r)
@@ -77,6 +110,66 @@ func (p *Schema) compileBoolean(name string, h paramHandler) paramHandler {
 	}
 }
 
+func (p *Schema) compileString(name string, h paramHandler) paramHandler {
+
+	var min int
+	if p.MinLength != nil {
+		min = *p.MinLength
+	}
+
+	var max int
+	if p.MaxLength != nil {
+		max = *p.MaxLength - 1
+	}
+
+	var filter func(string) error
+	if p.MinLength != nil && p.MaxLength != nil {
+		filter = func(s string) error {
+			l := len(s)
+			if l >= min && l <= max {
+				return nil
+			}
+			return Error400("%s out of bounds len %d...%d", name, min, max)
+		}
+	} else if p.MinLength != nil {
+		filter = func(s string) error {
+			if len(s) >= min {
+				return nil
+			}
+			return Error400("%s out of bounds len min %d", name, min)
+		}
+	} else if p.Maximum != nil {
+		filter = func(s string) error {
+			if len(s) <= max {
+				return nil
+			}
+			return Error400("%s %d out of bounds max %d", name, max)
+		}
+	} else {
+		// No min/max set
+		filter = func(s string) error {
+			return nil
+		}
+	}
+
+	// Validate the parameter is an integer
+	return func(r *rest.Rest) (interface{}, error) {
+		v, err := h(r)
+		if err != nil {
+			return nil, err
+		}
+
+		err = filter(v.(string))
+		if err != nil {
+			return nil, err
+		}
+
+		return v, nil
+	}
+
+}
+
+// compileInteger ensures an integer parameter is that and, if configured valid within a specified range
 func (p *Schema) compileInteger(name string, h paramHandler) paramHandler {
 
 	var min int
@@ -103,21 +196,21 @@ func (p *Schema) compileInteger(name string, h paramHandler) paramHandler {
 			if i >= min && i <= max {
 				return nil
 			}
-			return fmt.Errorf("Value %d out of bounds %d...%d", i, min, max)
+			return Error400("Value %d out of bounds %d...%d", i, min, max)
 		}
 	} else if p.Minimum != nil {
 		filter = func(i int) error {
 			if i >= min {
 				return nil
 			}
-			return fmt.Errorf("Value %d out of bounds %d...", i, min)
+			return Error400("Value %d out of bounds %d...", i, min)
 		}
 	} else if p.Maximum != nil {
 		filter = func(i int) error {
 			if i <= max {
 				return nil
 			}
-			return fmt.Errorf("Value %d out of bounds ...%d", i, max)
+			return Error400("Value %d out of bounds ...%d", i, max)
 		}
 	} else {
 		// No min/max set
@@ -147,51 +240,14 @@ func (p *Schema) compileInteger(name string, h paramHandler) paramHandler {
 	}
 }
 
-func (p *Schema) IntMin(name string, min int, h paramHandler) paramHandler {
-	minError := fmt.Errorf("Param %s minimum of %d", name, min)
-
-	return func(r *rest.Rest) (interface{}, error) {
-		v, err := h(r)
-		if err != nil {
-			return nil, err
-		}
-
-		i := v.(int)
-
-		if i < min {
-			return nil, minError
-		}
-
-		return i, nil
-	}
-}
-
-func (p *Schema) IntMax(name string, max int, h paramHandler) paramHandler {
-	maxError := fmt.Errorf("Param %s maximum of %d", name, max)
-
-	return func(r *rest.Rest) (interface{}, error) {
-		v, err := h(r)
-		if err != nil {
-			return nil, err
-		}
-
-		i := v.(int)
-
-		if i > max {
-			return nil, maxError
-		}
-
-		return i, nil
-	}
-}
-
+// compileRegex handles the pattern matching
 func (p *Schema) compileRegex(name string, h paramHandler) (paramHandler, error) {
-	patternError := fmt.Errorf("Param %s must match \"%s\"", name, p.Pattern)
-
 	exp, err := regexp.Compile(p.Pattern)
 	if err != nil {
 		return nil, fmt.Errorf("Invalid pattern \"%s\" for %s: %s", p.Pattern, name, err.Error())
 	}
+
+	patternError := Error400("Param %s must match \"%s\"", name, p.Pattern)
 
 	return func(r *rest.Rest) (interface{}, error) {
 		v, err := h(r)

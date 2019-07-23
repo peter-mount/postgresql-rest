@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/peter-mount/golib/rest"
-	"io/ioutil"
 	"log"
 	"strings"
 )
@@ -17,6 +16,7 @@ type Method struct {
 	Parameters    []*Parameter        `yaml:"parameters,omitempty"`
 	Handler       *Handler            `yaml:"handler,omitempty"`
 	Responses     map[string]Response `yaml:"responses,omitempty"`
+	handler       rest.RestHandler    `yaml:"-"`
 	paramHandlers []paramHandler      `yaml:"-"`
 }
 
@@ -85,76 +85,50 @@ func (m *Method) start(path, method string, server *rest.Server) error {
 
 	m.Handler.sql = "SELECT " + m.Handler.Function + "(" + strings.Join(params, ",") + ")"
 
-	server.Handle(path, m.handleRequest).Methods(strings.ToUpper(method))
+	server.Handle(path, m.handler).Methods(strings.ToUpper(method))
 
 	return nil
 }
 
-func (m *Method) extractArgsX(r *rest.Rest) ([]interface{}, error) {
-	var args []interface{}
-
-	for i, param := range m.Parameters {
-		var val interface{}
-
-		switch param.In {
-		// Non OpenAPI standard, allow body content to be used
-		case "body":
-			br, err := r.BodyReader()
-			if err != nil {
-				return nil, err
-			}
-
-			b, err := ioutil.ReadAll(br)
-			if err != nil {
-				return nil, err
-			}
-			val = string(b)
-
-		case "header":
-			val = r.GetHeader(param.Name)
-
-		case "path":
-			val = r.Var(param.Name)
-
-			// Query params are handed the same as path in mux
-		case "query":
-			val = r.Var(param.Name)
-
-		default:
-			return nil, fmt.Errorf("no in for \"%s\" arg %d", param.Name, i)
-		}
-
-		args = append(args, val)
-	}
-
-	return args, nil
-}
-
-func (m *Method) handleRequest(r *rest.Rest) error {
+func (m *Method) defaultHandler(r *rest.Rest) error {
 	log.Println(m.paramHandlers)
 	args, err := m.extractArgs(r)
 	if err != nil {
-		r.Status(400).
-			Value(err.Error())
-		return nil
+		return err
 	}
 
 	var result sql.NullString
 	err = m.Handler.DB.QueryRow(m.Handler.sql, args...).Scan(&result)
 	if err != nil {
-		return err
+		return WrapError(err)
 	}
 
 	if result.Valid {
 		// As we are returning a single value then write that to the response as-is.
 		// If we use Value(result) then it will get escaped
-		r.Reader(strings.NewReader(result.String))
+		r.Status(200).
+			Reader(strings.NewReader(result.String))
 	} else {
-		r.Value(nil)
+		// No value so return a 404
+		return Error404("")
 	}
 
 	if m.Handler.ContentType != "" {
+		// Forced in handler definition
 		r.ContentType(m.Handler.ContentType)
+	} else {
+		// Look for first content type in the methods responses for "200"
+		if resp, ok := m.Responses["200"]; ok {
+			ct := ""
+			for c, _ := range resp.Content {
+				if ct == "" {
+					ct = c
+				}
+			}
+			if ct != "" {
+				r.ContentType(ct)
+			}
+		}
 	}
 
 	if m.Handler.MaxAge < 0 {
