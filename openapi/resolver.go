@@ -78,18 +78,20 @@ func (m *Method) visit(r *Resolver) error {
 		if err != nil {
 			return err
 		}
+
+		err = r.visit(p.Schema.Reference, p.Schema.visit)
+		if err != nil {
+			return err
+		}
 	}
 
 	for _, resp := range m.Responses {
-		for _, cont := range resp.Content {
-			if cont.Schema != nil {
-				err := r.visit(cont.Schema.Reference, cont.Schema.visit)
-				if err != nil {
-					return err
-				}
-			}
+		err := resp.visit(r)
+		if err != nil {
+			return err
 		}
 	}
+
 	return nil
 }
 
@@ -108,5 +110,26 @@ func (s *Schema) visit(r *Resolver) error {
 		return fmt.Errorf("failed to resolve %s", s.Ref)
 	}
 	s.SchemaImpl = v.SchemaImpl
+	return nil
+}
+
+func (s *Response) visit(r *Resolver) error {
+	if s.Ref != "" {
+		v, ok := r.components.Responses[s.Reference.RefName()]
+		if !ok {
+			return fmt.Errorf("failed to resolve %s", s.Ref)
+		}
+		s.ResponseImpl = v.ResponseImpl
+	}
+
+	for _, cont := range s.Content {
+		if cont.Schema != nil {
+			err := r.visit(cont.Schema.Reference, cont.Schema.visit)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
 	return nil
 }

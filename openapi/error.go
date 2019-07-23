@@ -5,6 +5,7 @@ import (
 	"github.com/peter-mount/golib/rest"
 	"log"
 	"strconv"
+	"strings"
 )
 
 // A common error object
@@ -93,14 +94,36 @@ func (m *Method) compileHandler() error {
 	m.handler = m.defaultHandler
 
 	for status, content := range m.Responses {
-		statusCode, err := strconv.Atoi(status)
-		if err != nil {
-			return err
+
+		var statusMin int
+		var statusMax int
+
+		// Handle the special cases, "1XX", "2XX", "3XX", "4XX" & "5XX"
+		if len(status) == 3 && strings.HasSuffix(status, "XX") {
+			// 1XX becomes 100..199 inclusive
+			statusCode, err := strconv.Atoi(status[:1])
+			if err != nil {
+				return err
+			}
+			statusMin = statusCode * 100
+			statusMax = statusMin + 99
+		} else {
+			// A single status code, if it's not numeric then fail
+			statusCode, err := strconv.Atoi(status)
+			if err != nil {
+				return err
+			}
+			statusMin = statusCode
+			statusMax = statusMin
+		}
+
+		if statusMin < 100 || statusMax > 599 {
+			return fmt.Errorf("Invalid response code %s", status)
 		}
 
 		for contentType, response := range content.Content {
 			if m.isValidContentType(contentType) && response.Schema.IsErrorSchema() {
-				m.handler = wrapError(statusCode, contentType, m.handler)
+				m.handler = wrapError(statusMin, statusMax, contentType, m.handler)
 			}
 		}
 	}
@@ -110,14 +133,14 @@ func (m *Method) compileHandler() error {
 }
 
 // wrapError wraps the request to catch specific errors
-func wrapError(status int, contentType string, h rest.RestHandler) rest.RestHandler {
+func wrapError(statusMin, statusMax int, contentType string, h rest.RestHandler) rest.RestHandler {
 	return func(r *rest.Rest) error {
 		err := h(r)
 
 		if err != nil {
 			// Not our error or for the wrong status then ignore
 			ourError, ok := err.(*restError)
-			if !ok || ourError.Status != status {
+			if !ok || ourError.Status < statusMin || ourError.Status > statusMax {
 				return err
 			}
 
