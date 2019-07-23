@@ -5,17 +5,19 @@ import (
 	"fmt"
 	"github.com/peter-mount/golib/rest"
 	"io/ioutil"
+	"log"
 	"strings"
 )
 
 // Method represents the handler of a method
 type Method struct {
-	Tags        []string            `yaml:"tags,omitempty"`
-	Summary     string              `yaml:"summary,omitempty"`
-	Description string              `yaml:"description,omitempty"`
-	Parameters  []*Parameter        `yaml:"parameters,omitempty"`
-	Handler     *Handler            `yaml:"handler,omitempty"`
-	Responses   map[string]Response `yaml:"responses,omitempty"`
+	Tags          []string            `yaml:"tags,omitempty"`
+	Summary       string              `yaml:"summary,omitempty"`
+	Description   string              `yaml:"description,omitempty"`
+	Parameters    []*Parameter        `yaml:"parameters,omitempty"`
+	Handler       *Handler            `yaml:"handler,omitempty"`
+	Responses     map[string]Response `yaml:"responses,omitempty"`
+	paramHandlers []paramHandler      `yaml:"-"`
 }
 
 type Parameter struct {
@@ -66,22 +68,29 @@ func (m *Method) Publish() *Method {
 	}
 }
 
-func (m *Method) start(path, method string, server *rest.Server) {
+func (m *Method) start(path, method string, server *rest.Server) error {
 	if m.Handler == nil {
-		return
+		return nil
+	}
+
+	err := m.compile()
+	if err != nil {
+		return err
 	}
 
 	var params []string
-	for i := range m.Parameters {
+	for i := range m.paramHandlers {
 		params = append(params, fmt.Sprintf("$%d", i+1))
 	}
 
 	m.Handler.sql = "SELECT " + m.Handler.Function + "(" + strings.Join(params, ",") + ")"
 
 	server.Handle(path, m.handleRequest).Methods(strings.ToUpper(method))
+
+	return nil
 }
 
-func (m *Method) extractArgs(r *rest.Rest) ([]interface{}, error) {
+func (m *Method) extractArgsX(r *rest.Rest) ([]interface{}, error) {
 	var args []interface{}
 
 	for i, param := range m.Parameters {
@@ -122,9 +131,12 @@ func (m *Method) extractArgs(r *rest.Rest) ([]interface{}, error) {
 }
 
 func (m *Method) handleRequest(r *rest.Rest) error {
+	log.Println(m.paramHandlers)
 	args, err := m.extractArgs(r)
 	if err != nil {
-		return err
+		r.Status(400).
+			Value(err.Error())
+		return nil
 	}
 
 	var result sql.NullString

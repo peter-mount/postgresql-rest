@@ -66,7 +66,10 @@ func (a *DBRest) PostInit() error {
 
 func (a *DBRest) Start() error {
 
-	a.config.Start(a.rest)
+	err := a.config.Start(a.rest)
+	if err != nil {
+		return err
+	}
 
 	if a.config.Webserver != nil && a.config.Webserver.ExposeOpenAPI != "" {
 		api := a.config.Publish()
