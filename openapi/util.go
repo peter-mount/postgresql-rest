@@ -10,8 +10,9 @@ func addSlash(p string) string {
 	}
 	return "/" + p
 }
+
 func AddPrefix(prefix, path string) string {
-	if prefix == "" {
+	if prefix == "" || strings.HasPrefix(prefix, "_") {
 		return addSlash(path)
 	}
 	return addSlash(prefix) + addSlash(path)

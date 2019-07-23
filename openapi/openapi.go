@@ -90,6 +90,7 @@ func (c *OpenAPI) unmarshal(parent *OpenAPI, filename string) error {
 		base := filepath.Dir(filename)
 
 		for prefix, path := range c.Imports {
+
 			importFileName := filepath.Join(base, path)
 			importFileName, err := filepath.Abs(importFileName)
 			if err != nil {
